@@ -91,7 +91,10 @@
     WGRAJ
   </button>
 
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
   <h3>Konsola urządzenia</h3>
+  <button id="rid-clear-console" type="button">WYCZYŚĆ KONSOLĘ</button>
+</div>
   <pre id="rid-console"
     style="height:240px;overflow:auto;background:#111;color:#9f9;padding:12px;white-space:pre-wrap">Gotowy do połączenia.</pre>
 
@@ -132,7 +135,11 @@
     box.textContent += "\n" + message;
     box.scrollTop = box.scrollHeight;
   }
-
+  
+$("rid-clear-console").addEventListener("click", () => {
+  $("rid-console").textContent = "";
+});
+  
   function setConnected(connected) {
     $("rid-connect").disabled = connected;
     $("rid-disconnect").disabled = !connected;
