@@ -44,5 +44,216 @@
     </span>
   </esp-web-install-button>
 
+
+
+
+
+
+
+
+
+<section id="rid-config" style="max-width:700px;margin:24px auto;padding:20px;border:1px solid #ccc;border-radius:12px;font-family:Arial,sans-serif">
+  <h2>Konfiguracja urządzenia</h2>
+  <p>Połącz urządzenie przez USB, ustaw parametry i kliknij WGRAJ.</p>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+    <button id="rid-connect" type="button">Połącz przez USB</button>
+    <button id="rid-disconnect" type="button" disabled>Rozłącz</button>
+    <label>
+      Prędkość portu:
+      <select id="rid-baud">
+        <option value="115200" selected>115200</option>
+        <option value="9600">9600</option>
+      </select>
+    </label>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <label>
+      AcftType
+      <input id="rid-acfttype" value="0xD"
+        style="box-sizing:border-box;width:100%;padding:10px;margin-top:5px">
+      <small>Typ statku powietrznego</small>
+    </label>
+
+    <label>
+      PPSdelay
+      <input id="rid-ppsdelay" type="number" value="60"
+        style="box-sizing:border-box;width:100%;padding:10px;margin-top:5px">
+      <small>Opóźnienie PPS</small>
+    </label>
+
+    <label style="grid-column:1/-1">
+      Task
+      <input id="rid-task" value="SAR"
+        style="box-sizing:border-box;width:100%;padding:10px;margin-top:5px">
+      <small>Rodzaj zadania</small>
+    </label>
+  </div>
+
+  <button id="rid-upload" type="button" disabled
+    style="margin-top:18px;padding:12px 28px;font-weight:bold">
+    WGRAJ
+  </button>
+
+  <h3>Konsola urządzenia</h3>
+  <pre id="rid-console"
+    style="height:200px;overflow:auto;background:#111;color:#9f9;padding:12px;white-space:pre-wrap">Nie połączono z urządzeniem.</pre>
+
+  <form id="rid-command-form" style="display:flex;gap:8px">
+    <input id="rid-command" placeholder="$POGNS,Task=SAR"
+      style="flex:1;min-width:0;padding:10px">
+    <button type="submit" disabled id="rid-send">Wyślij</button>
+  </form>
+</section>
+
+<script>
+(() => {
+  const root = document.getElementById("rid-config");
+  if (root.dataset.initialized) return;
+  root.dataset.initialized = "1";
+
+  const $ = id => document.getElementById(id);
+  let port = null;
+  let reader = null;
+  let writer = null;
+  let readTask = null;
+  let keepReading = false;
+  let textBuffer = "";
+
+  function log(message) {
+    const box = $("rid-console");
+    box.textContent += "\n" + message;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setConnected(connected) {
+    $("rid-connect").disabled = connected;
+    $("rid-disconnect").disabled = !connected;
+    $("rid-upload").disabled = !connected;
+    $("rid-send").disabled = !connected;
+    $("rid-baud").disabled = connected;
+  }
+
+  async function readLoop() {
+    const decoder = new TextDecoder();
+    try {
+      while (keepReading && port?.readable) {
+        const result = await reader.read();
+        if (result.done) break;
+        if (result.value) {
+          textBuffer += decoder.decode(result.value, { stream: true });
+          const lines = textBuffer.split(/\r?\n/);
+          textBuffer = lines.pop() || "";
+          lines.forEach(line => {
+            if (line.trim()) log("RX: " + line.trim());
+          });
+        }
+      }
+    } catch (err) {
+      if (keepReading) log("Błąd odczytu: " + err.message);
+    }
+  }
+
+  async function sendLine(command) {
+    if (!writer) throw new Error("Najpierw połącz się z urządzeniem.");
+    log("TX: " + command);
+    await writer.write(new TextEncoder().encode(command + "\r\n"));
+  }
+
+  $("rid-connect").addEventListener("click", async () => {
+    try {
+      if (!("serial" in navigator)) {
+        throw new Error("Web Serial nie jest obsługiwany. Użyj aktualnego Chrome lub Edge.");
+      }
+
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: Number($("rid-baud").value) });
+
+      writer = port.writable.getWriter();
+      reader = port.readable.getReader();
+      keepReading = true;
+      setConnected(true);
+      log("Połączono. Port: " + $("rid-baud").value + " baud.");
+
+      readTask = readLoop();
+    } catch (err) {
+      log("Błąd połączenia: " + err.message);
+      if (port) {
+        try { await port.close(); } catch (_) {}
+      }
+      port = null;
+      setConnected(false);
+    }
+  });
+
+  $("rid-disconnect").addEventListener("click", async () => {
+    keepReading = false;
+    try {
+      if (reader) {
+        await reader.cancel();
+        await readTask;
+        reader.releaseLock();
+      }
+    } catch (_) {}
+    reader = null;
+
+    try {
+      if (writer) writer.releaseLock();
+    } catch (_) {}
+    writer = null;
+
+    try {
+      if (port) await port.close();
+    } catch (err) {
+      log("Uwaga przy zamykaniu portu: " + err.message);
+    }
+
+    port = null;
+    setConnected(false);
+    log("Rozłączono.");
+  });
+
+  $("rid-upload").addEventListener("click", async () => {
+    const commands = [
+      "$POGNS,AcftType=" + $("rid-acfttype").value.trim(),
+      "$POGNS,PPSdelay=" + $("rid-ppsdelay").value.trim(),
+      "$POGNS,Task=" + $("rid-task").value.trim()
+    ];
+
+    if (commands.some(command => command.endsWith("="))) {
+      log("Błąd: uzupełnij wszystkie parametry.");
+      return;
+    }
+
+    $("rid-upload").disabled = true;
+    try {
+      for (const command of commands) {
+        await sendLine(command);
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      log("Wysłano wszystkie komendy. Sprawdź odpowiedź urządzenia.");
+    } catch (err) {
+      log("Błąd wysyłania: " + err.message);
+    } finally {
+      $("rid-upload").disabled = !writer;
+    }
+  });
+
+  $("rid-command-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const command = $("rid-command").value.trim();
+    if (!command) return;
+
+    try {
+      await sendLine(command);
+      $("rid-command").value = "";
+    } catch (err) {
+      log("Błąd wysyłania: " + err.message);
+    }
+  });
+})();
+</script>
+  
 </body>
 </html>
