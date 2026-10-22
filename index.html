@@ -1,0 +1,53 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTIT RID Relay — instalator</title>
+  <script
+    type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module">
+  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 680px;
+      margin: 60px auto;
+      padding: 24px;
+      line-height: 1.6;
+    }
+    esp-web-install-button {
+      display: block;
+      margin: 28px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>HTIT RID Relay</h1>
+  <p>Instalator firmware dla ESP32-S3.</p>
+
+  <h2>Instrukcja</h2>
+  <ol>
+    <li>Podłącz urządzenie do komputera przez USB.</li>
+    <li>Otwórz tę stronę w Chrome lub Edge.</li>
+    <li>Kliknij przycisk instalacji poniżej.</li>
+    <li>Wybierz port szeregowy urządzenia.</li>
+    <li>Potwierdź instalację i poczekaj na zakończenie.</li>
+  </ol>
+
+  <esp-web-install-button manifest="./manifest.json">
+    <button slot="activate">Zainstaluj firmware</button>
+    <span slot="unsupported">
+      Użyj aktualnej wersji Chrome lub Edge na komputerze.
+    </span>
+    <span slot="not-allowed">
+      Instalator wymaga strony HTTPS.
+    </span>
+  </esp-web-install-button>
+
+  <p>
+    Uwaga: instalacja może skasować dane zapisane w pamięci urządzenia.
+  </p>
+</body>
+</html>
