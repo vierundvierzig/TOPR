@@ -8,7 +8,7 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "firmware-merged.bin",
+          "path": "firmware-merged-relay.bin",
           "offset": 0
         }
       ]
